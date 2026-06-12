@@ -52,10 +52,14 @@ input.field-error{border-color:var(--red)!important;}
 .round-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:8px;}
 .round-item{display:flex;align-items:center;gap:9px;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:9px 13px;cursor:pointer;transition:all .15s;}
 .round-item:hover,.round-item.checked{border-color:var(--accent);background:var(--accent-lt);}
+.round-item.done{opacity:.5;cursor:default;background:var(--surface2);}
+.round-item.done:hover{border-color:var(--border);background:var(--surface2);}
 .round-item input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;flex-shrink:0;cursor:pointer;}
-.ri-name{font-size:13px;font-weight:600;}
-.ri-date{font-size:11px;color:var(--text-muted);}
-.ri-goal{font-size:11px;color:var(--accent);font-weight:600;white-space:nowrap;margin-left:auto;}
+.round-item input[type=checkbox]:disabled{cursor:default;}
+.ri-name{font-size:13px;font-weight:600;white-space:nowrap;}
+.ri-date{font-size:11px;color:var(--text-muted);white-space:nowrap;}
+.ri-goal{font-size:12px;color:var(--accent);font-weight:700;white-space:nowrap;margin-left:auto;flex-shrink:0;}
+.ri-done-badge{font-size:10px;font-weight:700;color:var(--text-light);background:var(--border);padding:1px 7px;border-radius:8px;flex-shrink:0;}
 .empty-msg{font-size:13px;color:var(--text-muted);padding:10px 0;}
 
 /* 회차별 카드 */
@@ -451,9 +455,8 @@ function fixYear(s,e){
   return{s,e};
 }
 function getRoundQ(r){
-  if(!r.startISO)return 0;
-  const m=parseInt(r.startISO.slice(5,7));
-  return m<=3?1:m<=6?2:m<=9?3:4;
+  const m=(r.quarterRaw||'').match(/(\d)분기/);
+  return m?parseInt(m[1]):0;
 }
 
 function parseRounds(csv){
@@ -466,13 +469,14 @@ function parseRounds(csv){
     if(!name.includes('이벤트'))continue;
     allRounds.push({
       name,
+      quarterRaw:(c[1]||'').trim(),
       startRaw:(c[5]||'').trim(),
       endRaw:(c[6]||'').trim(),
       startISO:parseDateStr((c[5]||'').trim()),
       endISO:parseDateStr((c[6]||'').trim()),
       prevNum:parseInt((c[7]||'').replace(/[^0-9]/g,''))||0,
       goalNum:parseInt((c[8]||'').replace(/[^0-9]/g,''))||0,
-      delta:(c[9]||'').trim()
+      status:(c[14]||'').trim()
     });
   }
   renderRoundList();
@@ -482,17 +486,13 @@ function renderRoundList(){
   const el=document.getElementById('roundList');
   if(!allRounds.length){el.innerHTML='<div class="empty-msg">회차 데이터가 없습니다.</div>';return;}
   el.innerHTML=allRounds.map((r,i)=>{
-    const dc=r.delta.includes('▲')?'#DC2626':'#2563EB';
-    return`<div class="round-item" id="ri_${i}" onclick="toggleRound(${i})">
-      <input type="checkbox" id="rc_${i}" onchange="onRoundCheck(${i})" onclick="event.stopPropagation()">
-      <div style="flex:1;min-width:0;">
-        <div class="ri-name">${r.name}</div>
-        <div class="ri-date">${r.startRaw} ~ ${r.endRaw}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0;">
-        <div class="ri-goal">${r.goalNum?numFmt(r.goalNum)+'명':''}</div>
-        <div style="font-size:11px;color:${dc};">${r.delta}</div>
-      </div>
+    const done=r.status==='완료';
+    return`<div class="round-item${done?' done':''}" id="ri_${i}" ${done?'':`onclick="toggleRound(${i})"`}>
+      <input type="checkbox" id="rc_${i}" ${done?'disabled':''} onchange="onRoundCheck(${i})" onclick="event.stopPropagation()">
+      <div class="ri-name">${r.name}</div>
+      <div class="ri-date">${r.startRaw}~${r.endRaw}</div>
+      <div class="ri-goal">${r.goalNum?numFmt(r.goalNum)+'명':''}</div>
+      ${done?'<span class="ri-done-badge">완료</span>':''}
     </div>`;
   }).join('');
 }
@@ -506,8 +506,9 @@ function onRoundCheck(i){
 function selectQ(q){
   document.querySelectorAll('.q-btn').forEach(b=>b.classList.remove('active'));
   event.target.classList.add('active');
-  allRounds.forEach((_,i)=>{
-    const match=q===0||getRoundQ(allRounds[i])===q;
+  allRounds.forEach((r,i)=>{
+    if(r.status==='완료')return;
+    const match=q===0||getRoundQ(r)===q;
     const cb=document.getElementById(`rc_${i}`);
     if(cb){cb.checked=match;document.getElementById(`ri_${i}`)?.classList.toggle('checked',match);}
   });
@@ -542,17 +543,13 @@ function renderGoalBlock(){
       <th style="padding:7px 10px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;font-weight:700;color:var(--text-muted);">기간</th>
       <th style="padding:7px 10px;text-align:right;border-bottom:2px solid var(--border);font-size:11px;font-weight:700;color:var(--text-muted);">전년실적</th>
       <th style="padding:7px 10px;text-align:right;border-bottom:2px solid var(--border);font-size:11px;font-weight:700;color:var(--text-muted);">금년목표</th>
-      <th style="padding:7px 10px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;font-weight:700;color:var(--text-muted);">전년대비</th>
     </tr></thead>
     <tbody>${checked.map(r=>{
-      const{s,e}=fixYear(r.startISO,r.endISO);
-      const dc=r.delta.includes('▲')?'#DC2626':'#2563EB';
       return`<tr style="border-bottom:1px solid var(--border);">
         <td style="padding:7px 10px;font-weight:600;">${r.name}</td>
         <td style="padding:7px 10px;text-align:center;color:var(--text-muted);font-size:12px;">${r.startRaw} ~ ${r.endRaw}</td>
         <td style="padding:7px 10px;text-align:right;">${numFmt(r.prevNum)}명</td>
         <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--accent);">${numFmt(r.goalNum)}명</td>
-        <td style="padding:7px 10px;text-align:center;font-weight:700;color:${dc};">${r.delta}</td>
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;
@@ -931,9 +928,6 @@ async function generateDocs(){
       const moUrl=pcard?.querySelector('.ri-mo').value.trim();
 
       const{prevNum,goalNum}=r;
-      const growthNum=prevNum&&goalNum?((goalNum-prevNum)/prevNum*100).toFixed(1):'—';
-      const growthStr=prevNum&&goalNum?(growthNum>0?'+':'')+growthNum+'%':'—';
-      const growthColor=Number(growthNum)>0?'E02020':'2563EB';
       const yr=sISO?new Date(sISO+'T00:00:00').getFullYear():2026;
       const periodStr=sISO&&eISO?`${fmtDate(sISO)} ~ ${fmtDate(eISO)} (${diffDays(sISO,eISO)+1}일간)`:'미입력';
       const sendDateStr=sendDateV?fmtKorDate(sendDateV)+' 이내 일괄 발송':'이벤트 종료 후 발송';
@@ -962,11 +956,9 @@ async function generateDocs(){
 
       // 목표 테이블
       children.push(h1('■ 이벤트 목표'));
-      children.push(new Table({width:{size:9746,type:WidthType.DXA},columnWidths:[3248,2166,2166,2166],rows:[
-        mkRow([hCell('구분',3248),hCell(`${yr-1}년`,2166),hCell(`${yr}년`,2166),hCell('증감률',2166)]),
-        mkRow([hCell('회원가입자수',3248),mkCell(numFmt(prevNum)+'명',{c:true,w:2166}),mkCell(numFmt(goalNum)+'명',{c:true,w:2166}),
-          new TableCell({borders:BORDERS,margins:{top:60,bottom:60,left:110,right:110},width:{size:2166,type:WidthType.DXA},verticalAlign:VerticalAlign.CENTER,
-            children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:growthStr,font:F,size:SZ,bold:true,color:growthColor})]})]})])
+      children.push(new Table({width:{size:9746,type:WidthType.DXA},columnWidths:[3248,3249,3249],rows:[
+        mkRow([hCell('구분',3248),hCell(`${yr-1}년`,3249),hCell(`${yr}년`,3249)]),
+        mkRow([hCell('회원가입자수',3248),mkCell(numFmt(prevNum)+'명',{c:true,w:3249}),mkCell(numFmt(goalNum)+'명',{c:true,w:3249})])
       ]}));
       children.push(blank());
 
