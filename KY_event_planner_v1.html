@@ -448,6 +448,29 @@ function parseDateStr(s){
   const yr=(mo<=3&&da>25)?2027:2026;
   return`${yr}-${String(mo).padStart(2,'0')}-${String(da).padStart(2,'0')}`;
 }
+// Apps Script가 Date 객체를 toString()한 값("Mon Jan 05 2026 17:00:00 GMT+0900 (한국 표준시)")을 파싱
+function cellToDate(s){
+  if(!s)return null;
+  s=s.trim();
+  if(!s)return null;
+  const d=new Date(s.replace(/\s*\([^)]*\)\s*$/,'')); // 끝의 "(한국 표준시)" 제거
+  return isNaN(d.getTime())?null:d;
+}
+function cellToISO(s){
+  const d=cellToDate(s);
+  if(!d)return'';
+  return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function cellToRaw(s){
+  const d=cellToDate(s);
+  if(!d)return'';
+  return`${d.getMonth()+1}/${d.getDate()}(${DOW[d.getDay()]})`;
+}
+// 소수점 섞인 숫자(예: 2358.735) → 정수
+function cellToInt(s){
+  const n=parseFloat((s||'').replace(/[^0-9.\-]/g,''));
+  return isNaN(n)?0:Math.round(n);
+}
 function fixYear(s,e){
   if(!s||!e)return{s,e};
   const sm=parseInt(s.slice(5,7)),em=parseInt(e.slice(5,7));
@@ -467,15 +490,16 @@ function parseRounds(csv){
     const c=parseCSVLine(lines[i]);
     const name=(c[2]||'').trim();
     if(!name.includes('이벤트'))continue;
+    const sRaw=(c[5]||'').trim(), eRaw=(c[6]||'').trim();
     allRounds.push({
       name,
       quarterRaw:(c[1]||'').trim(),
-      startRaw:(c[5]||'').trim(),
-      endRaw:(c[6]||'').trim(),
-      startISO:parseDateStr((c[5]||'').trim()),
-      endISO:parseDateStr((c[6]||'').trim()),
-      prevNum:parseInt((c[7]||'').replace(/[^0-9]/g,''))||0,
-      goalNum:parseInt((c[8]||'').replace(/[^0-9]/g,''))||0,
+      startRaw:cellToRaw(sRaw),
+      endRaw:cellToRaw(eRaw),
+      startISO:cellToISO(sRaw),
+      endISO:cellToISO(eRaw),
+      prevNum:cellToInt(c[7]),
+      goalNum:cellToInt(c[8]),
       status:(c[14]||'').trim()
     });
   }
