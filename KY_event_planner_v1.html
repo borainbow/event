@@ -59,6 +59,7 @@ input.field-error{border-color:var(--red)!important;}
 .ri-name{font-size:13px;font-weight:600;white-space:nowrap;}
 .ri-date{font-size:11px;color:var(--text-muted);white-space:nowrap;}
 .ri-goal{font-size:12px;color:var(--accent);font-weight:700;white-space:nowrap;margin-left:auto;flex-shrink:0;}
+.round-item.done .ri-goal{color:var(--text-muted);}
 .ri-done-badge{font-size:10px;font-weight:700;color:var(--text-light);background:var(--border);padding:1px 7px;border-radius:8px;flex-shrink:0;}
 .empty-msg{font-size:13px;color:var(--text-muted);padding:10px 0;}
 
@@ -500,6 +501,7 @@ function parseRounds(csv){
       endISO:cellToISO(eRaw),
       prevNum:cellToInt(c[7]),
       goalNum:cellToInt(c[8]),
+      actualNum:cellToInt(c[10]),
       status:(c[14]||'').trim()
     });
   }
@@ -515,7 +517,7 @@ function renderRoundList(){
       <input type="checkbox" id="rc_${i}" ${done?'disabled':''} onchange="onRoundCheck(${i})" onclick="event.stopPropagation()">
       <div class="ri-name">${r.name}</div>
       <div class="ri-date">${r.startRaw}~${r.endRaw}</div>
-      <div class="ri-goal">${r.goalNum?numFmt(r.goalNum)+'명':''}</div>
+      <div class="ri-goal">${done?(r.actualNum?numFmt(r.actualNum)+'명 (실적)':''):(r.goalNum?numFmt(r.goalNum)+'명':'')}</div>
       ${done?'<span class="ri-done-badge">완료</span>':''}
     </div>`;
   }).join('');
@@ -628,29 +630,38 @@ function renderPageInputs(){
   }
   const saved={};
   wrap.querySelectorAll('.page-card').forEach(c=>{
-    saved[c.dataset.key]={
-      pcUrl:c.querySelector('.ri-pc')?.value||'',
-      moUrl:c.querySelector('.ri-mo')?.value||''
-    };
+    saved[c.dataset.key]=[...c.querySelectorAll('.ref-row')].map(row=>({
+      url:row.querySelector('.ref-url')?.value||'',
+      point:row.querySelector('.ref-point')?.value||''
+    }));
   });
   wrap.innerHTML=checked.map(r=>{
-    const k=r.name;const p=saved[k]||{};
+    const k=r.name;const refs=saved[k]&&saved[k].length?saved[k]:[{url:'',point:''}];
     return`<div class="form-block page-card" data-key="${k}" style="margin-bottom:10px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;">${r.name}</span>
+        <span style="font-size:12px;color:var(--text-muted);">레퍼런스 URL</span>
       </div>
-      <div class="grid-2">
-        <div class="field">
-          <label class="fl">PC URL</label>
-          <input class="fi ri-pc" placeholder="https://www.kimyoung.co.kr/event/..." value="${p.pcUrl||''}">
-        </div>
-        <div class="field">
-          <label class="fl">MO URL</label>
-          <input class="fi ri-mo" placeholder="https://m.kimyoung.co.kr/event/..." value="${p.moUrl||''}">
-        </div>
+      <div class="ref-list">${refs.map(rf=>`
+        <div class="ref-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+          <input class="fi ref-url" placeholder="https://..." value="${rf.url}" style="flex:1.3;">
+          <input class="fi ref-point" placeholder="적용 포인트 (예: 배너 디자인, CTA 위치 등)" value="${rf.point}" style="flex:1;">
+          <button class="btn-del" onclick="this.closest('.ref-row').remove()">✕</button>
+        </div>`).join('')}
       </div>
+      <button class="btn-add-row" onclick="addRefRow(this)">+ URL 추가</button>
     </div>`;
   }).join('');
+}
+function addRefRow(btn){
+  const list=btn.previousElementSibling;
+  const row=document.createElement('div');
+  row.className='ref-row';
+  row.style.cssText='display:flex;gap:8px;margin-bottom:8px;align-items:center;';
+  row.innerHTML=`<input class="fi ref-url" placeholder="https://..." style="flex:1.3;">
+    <input class="fi ref-point" placeholder="적용 포인트 (예: 배너 디자인, CTA 위치 등)" style="flex:1;">
+    <button class="btn-del" onclick="this.closest('.ref-row').remove()">✕</button>`;
+  list.appendChild(row);
 }
 
 // ── 날짜 ────────────────────────────────────────────
@@ -723,26 +734,19 @@ async function loadPrizeCatalog(){
 function renderCatalog(){
   const body=document.getElementById('catalogBody');
   if(!prizeData.length){body.innerHTML='<div class="cat-empty">경품 데이터 없음</div>';return;}
-  const groups={};
-  prizeData.forEach((p,i)=>{if(!groups[p.category])groups[p.category]=[];groups[p.category].push({...p,idx:i});});
-  const icons={'기프티콘':'🎟','캐쉬':'💰','쿠폰':'🎫','기타':'📦'};
-  body.innerHTML=Object.entries(groups).map(([cat,items])=>`
-    <div class="cat-group">
-      <div class="cat-group-title">${icons[cat]||'📦'} ${cat}</div>
-      <div class="cat-items">${items.map(p=>`
-        <div class="cat-item${p.budgetFree?' bf':''}" id="ci_${p.idx}" onclick="toggleCatItem(${p.idx})">
-          <div class="ci-ck" id="ck_${p.idx}"></div>
-          <div class="ci-bd">
-            <div class="ci-nm">${p.name}</div>
-            <div class="ci-pr">${p.price?numFmt(p.price)+'원':'가격 미정'}${p.budgetFree?' · 예산 외':''}</div>
-          </div>
-          <div class="ci-qw" onclick="event.stopPropagation()">
-            <input class="ci-q" id="cq_${p.idx}" type="text" placeholder="0" oninput="onCiQty(${p.idx},this)">
-            <span class="ci-u">개</span>
-          </div>
-        </div>`).join('')}
+  body.innerHTML=`<div class="cat-items">${prizeData.map((p,idx)=>`
+    <div class="cat-item${p.budgetFree?' bf':''}" id="ci_${idx}" onclick="toggleCatItem(${idx})">
+      <div class="ci-ck" id="ck_${idx}"></div>
+      <div class="ci-bd">
+        <div class="ci-nm">${p.name}</div>
+        <div class="ci-pr">${p.price?numFmt(p.price)+'원':'가격 미정'}${p.budgetFree?' · 예산 외':''}</div>
       </div>
-    </div>`).join('');
+      <div class="ci-qw" onclick="event.stopPropagation()">
+        <input class="ci-q" id="cq_${idx}" type="text" placeholder="0" oninput="onCiQty(${idx},this)">
+        <span class="ci-u">개</span>
+      </div>
+    </div>`).join('')}
+  </div>`;
 }
 
 function toggleCatItem(idx){
@@ -948,8 +952,10 @@ async function generateDocs(){
       const{s:sISO,e:eISO}=fixYear(r.startISO,r.endISO);
       const eventName=card?.querySelector('.ri-name').value.trim();
       const mainCopy=card?.querySelector('.ri-copy').value.trim()||eventName;
-      const pcUrl=pcard?.querySelector('.ri-pc').value.trim();
-      const moUrl=pcard?.querySelector('.ri-mo').value.trim();
+      const refs=pcard?[...pcard.querySelectorAll('.ref-row')].map(row=>({
+        url:row.querySelector('.ref-url').value.trim(),
+        point:row.querySelector('.ref-point').value.trim()
+      })).filter(rf=>rf.url):[];
 
       const{prevNum,goalNum}=r;
       const yr=sISO?new Date(sISO+'T00:00:00').getFullYear():2026;
@@ -1070,8 +1076,12 @@ async function generateDocs(){
       children.push(h1('■ 페이지 제작 및 구성'));
       children.push(p('가.  PC/MO 페이지, FULL 페이지 제작 (기존 페이지 수정)',{i1:true}));
       children.push(p('나.  MO페이지: 친구에게 공유하기 버튼 추가',{i1:true}));
-      if(pcUrl)children.push(p(`다.  PC: ${pcUrl}`,{i1:true}));
-      if(moUrl)children.push(p(`라.  MO: ${moUrl}`,{i1:true}));
+      if(refs.length){
+        children.push(p('다.  레퍼런스',{i1:true}));
+        refs.forEach(rf=>{
+          children.push(p(`- ${rf.url}${rf.point?` (${rf.point})`:''}`,{i2:true}));
+        });
+      }
       children.push(blank());
 
       if(mainCopy){children.push(h1('■ 메인카피'));children.push(p(mainCopy,{i1:true}));children.push(blank());}
@@ -1132,7 +1142,7 @@ window.addEventListener('load',()=>{
 
 <footer style="margin-top:50px;padding:20px 36px;border-top:1px solid var(--border);text-align:center;background:var(--surface);">
   <div style="font-size:13px;font-weight:700;color:var(--accent);">김영편입 이벤트 기획안 생성기 v6</div>
-  <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">구글 시트 실시간 연동 · 경품 카탈로그 · 예산 체크 · 분기 일괄 Word 생성</div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">made by 김세라 &amp; 엄보라</div>
 </footer>
 </body>
 </html>
