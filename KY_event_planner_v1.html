@@ -734,19 +734,26 @@ async function loadPrizeCatalog(){
 function renderCatalog(){
   const body=document.getElementById('catalogBody');
   if(!prizeData.length){body.innerHTML='<div class="cat-empty">경품 데이터 없음</div>';return;}
-  body.innerHTML=`<div class="cat-items">${prizeData.map((p,idx)=>`
-    <div class="cat-item${p.budgetFree?' bf':''}" id="ci_${idx}" onclick="toggleCatItem(${idx})">
-      <div class="ci-ck" id="ck_${idx}"></div>
-      <div class="ci-bd">
-        <div class="ci-nm">${p.name}</div>
-        <div class="ci-pr">${p.price?numFmt(p.price)+'원':'가격 미정'}${p.budgetFree?' · 예산 외':''}</div>
+  const groups={};
+  prizeData.forEach((p,i)=>{if(!groups[p.category])groups[p.category]=[];groups[p.category].push({...p,idx:i});});
+  const icons={'기프티콘':'🎟','캐쉬':'💰','쿠폰':'🎫','기타':'📦'};
+  body.innerHTML=Object.entries(groups).map(([cat,items])=>`
+    <div class="cat-group">
+      <div class="cat-group-title">${icons[cat]||'📦'} ${cat}</div>
+      <div class="cat-items">${items.map(p=>`
+        <div class="cat-item${p.budgetFree?' bf':''}" id="ci_${p.idx}" onclick="toggleCatItem(${p.idx})">
+          <div class="ci-ck" id="ck_${p.idx}"></div>
+          <div class="ci-bd">
+            <div class="ci-nm">${p.name}</div>
+            <div class="ci-pr">${p.price?numFmt(p.price)+'원':'가격 미정'}${p.budgetFree?' · 예산 외':''}</div>
+          </div>
+          <div class="ci-qw" onclick="event.stopPropagation()">
+            <input class="ci-q" id="cq_${p.idx}" type="text" placeholder="0" oninput="onCiQty(${p.idx},this)">
+            <span class="ci-u">개</span>
+          </div>
+        </div>`).join('')}
       </div>
-      <div class="ci-qw" onclick="event.stopPropagation()">
-        <input class="ci-q" id="cq_${idx}" type="text" placeholder="0" oninput="onCiQty(${idx},this)">
-        <span class="ci-u">개</span>
-      </div>
-    </div>`).join('')}
-  </div>`;
+    </div>`).join('');
 }
 
 function toggleCatItem(idx){
