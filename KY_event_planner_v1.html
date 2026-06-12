@@ -402,27 +402,23 @@ const SHEET_ID='1R-6wTOx36OIjvRd5cg_Dq_agd5Qr4CxQEl1UUf3PlvQ';
 let allRounds=[];
 
 // ── 시트 로드 (URL 인코딩 처리) ────────────────────
+const WEBAPP_URL='https://script.google.com/macros/s/AKfycbylyYIRQWpjXnhRfBw475FO3c6NmlOQ8D7UnjiCdfjurwfNeqVCs7N44c0m4727j5rd6g/exec';
 async function loadSheet(){
   setHdrStatus('loading','⏳ 연결 중...');
-  const name=encodeURIComponent('일정');
-  const tryUrls=[
-    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${name}`,
-    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${name}`
-  ];
-  for(const url of tryUrls){
-    try{
-      const res=await fetch(url,{cache:'no-store'});
-      if(!res.ok)continue;
-      const text=await res.text();
-      if(text.length<20)continue;
-      parseRounds(text);
-      if(allRounds.length>0){
-        setHdrStatus('ok',`✅ ${allRounds.length}개 회차 — 클릭 시 새로고침`);
-        return;
-      }
-    }catch(e){continue;}
+  try{
+    const res=await fetch(`${WEBAPP_URL}?sheet=${encodeURIComponent('일정')}`,{cache:'no-store'});
+    const text=await res.text();
+    if(text.startsWith('ERROR')||text.length<20)throw new Error(text);
+    parseRounds(text);
+    if(allRounds.length>0){
+      setHdrStatus('ok',`✅ ${allRounds.length}개 회차 — 클릭 시 새로고침`);
+      return;
+    }
+    throw new Error('no rounds parsed');
+  }catch(e){
+    setHdrStatus('err','❌ 연결 실패 — 클릭하여 재시도');
+    console.error('loadSheet error:',e);
   }
-  setHdrStatus('err','❌ 연결 실패 — 클릭하여 재시도');
 }
 
 function setHdrStatus(type,msg){
@@ -682,21 +678,9 @@ async function loadPrizeCatalog(){
   const st=document.getElementById('catalogStatus');
   st.className='cat-status';st.textContent='로딩 중...';
   try{
-    const pname=encodeURIComponent('경품');
-    const urls=[
-      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${pname}`,
-      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${pname}`
-    ];
-    let text='';
-    for(const url of urls){
-      try{
-        const res=await fetch(url,{cache:'no-store'});
-        if(!res.ok)continue;
-        text=await res.text();
-        if(text.length>20)break;
-      }catch(e){continue;}
-    }
-    if(!text||text.length<20)throw new Error('empty');
+    const res=await fetch(`${WEBAPP_URL}?sheet=${encodeURIComponent('경품')}`,{cache:'no-store'});
+    const text=await res.text();
+    if(text.startsWith('ERROR')||text.length<10)throw new Error(text);
     prizeData=[];
     const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
     for(let i=1;i<lines.length;i++){
