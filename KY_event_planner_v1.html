@@ -404,7 +404,7 @@ let allRounds=[];
 // ── 시트 로드 (URL 인코딩 처리) ────────────────────
 async function loadSheet(){
   setHdrStatus('loading','⏳ 연결 중...');
-  const name=encodeURIComponent('분기별일정');
+  const name=encodeURIComponent('일정');
   const tryUrls=[
     `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${name}`,
     `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${name}`
@@ -466,17 +466,17 @@ function parseRounds(csv){
   // 실제 시트 컬럼: 기준,차수,주제,링크,시작일,종료일,전년실적,금년목표,전년대비,...
   for(let i=1;i<lines.length;i++){
     const c=parseCSVLine(lines[i]);
-    const name=(c[1]||'').trim();
+    const name=(c[2]||'').trim();
     if(!name.includes('이벤트'))continue;
     allRounds.push({
       name,
-      startRaw:(c[4]||'').trim(),
-      endRaw:(c[5]||'').trim(),
-      startISO:parseDateStr((c[4]||'').trim()),
-      endISO:parseDateStr((c[5]||'').trim()),
-      prevNum:parseInt((c[6]||'').replace(/[^0-9]/g,''))||0,
-      goalNum:parseInt((c[7]||'').replace(/[^0-9]/g,''))||0,
-      delta:(c[8]||'').trim()
+      startRaw:(c[5]||'').trim(),
+      endRaw:(c[6]||'').trim(),
+      startISO:parseDateStr((c[5]||'').trim()),
+      endISO:parseDateStr((c[6]||'').trim()),
+      prevNum:parseInt((c[7]||'').replace(/[^0-9]/g,''))||0,
+      goalNum:parseInt((c[8]||'').replace(/[^0-9]/g,''))||0,
+      delta:(c[9]||'').trim()
     });
   }
   renderRoundList();
@@ -701,10 +701,10 @@ async function loadPrizeCatalog(){
     const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
     for(let i=1;i<lines.length;i++){
       const c=parseCSVLine(lines[i]);
-      const cat=(c[0]||'').trim(),name=(c[1]||'').trim();
+      const cat=(c[1]||'').trim(),name=(c[2]||'').trim();
       if(!cat||!name)continue;
-      const price=parseInt((c[2]||'').replace(/[^0-9]/g,''))||0;
-      const budgetFree=(c[3]||'').includes('예산 미포함');
+      const price=parseInt((c[3]||'').replace(/[^0-9]/g,''))||0;
+      const budgetFree=(c[4]||'').includes('예산 미포함');
       prizeData.push({category:cat,name,price,budgetFree});
     }
     st.className='cat-status ok';st.textContent=`✅ ${prizeData.length}개 로드 완료`;
